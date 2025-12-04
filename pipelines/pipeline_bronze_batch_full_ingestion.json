@@ -1,0 +1,176 @@
+{
+    "name": "pipeline_bronze_batch_full_ingestion",
+    "properties": {
+        "annotations": [
+            "Bronze",
+            "Batch",
+            "FullLoad",
+            "Ingestion"
+        ],
+        "description": "Ingests full batch data from API or relational sources into ADLS Gen2 Bronze as raw files (CSV/JSON).",
+        "parameters": {
+            "sourceSystemName": {
+                "type": "string",
+                "description": "Name of the source system (e.g., 'marketing', 'crm')."
+            },
+            "sourceType": {
+                "type": "string",
+                "description": "Type of source ('Api' or 'SqlDb')."
+            },
+            "sourceSchemaName": {
+                "type": "string",
+                "defaultValue": "",
+                "description": "Schema name for SqlDb source."
+            },
+            "sourceEntityName": {
+                "type": "string",
+                "description": "Table name for SqlDb or conceptual entity name for API."
+            },
+            "sourceLinkedService": {
+                "type": "string",
+                "description": "Name of the source linked service (e.g., 'MarketingApi-LS', 'SurveysDb-LS')."
+            },
+            "sourceRelativeUrl": {
+                "type": "string",
+                "defaultValue": "",
+                "description": "Relative URL for API sources."
+            },
+            "outputFileFormat": {
+                "type": "string",
+                "defaultValue": "json",
+                "description": "Output file format (e.g., 'json', 'csv')."
+            },
+            "dlqRelativePath": {
+                "type": "string",
+                "defaultValue": "dlq/",
+                "description": "Relative path for Dead-Letter Queue within bronze container."
+            }
+        },
+        "variables": {
+            "executionYear": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(utcNow(), 'yyyy')"
+            },
+            "executionMonth": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(utcNow(), 'MM')"
+            },
+            "executionDay": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(utcNow(), 'dd')"
+            },
+            "outputFileName": {
+                "type": "String",
+                "defaultValue": "@concat(pipeline().parameters.sourceEntityName, '_', formatDateTime(utcNow(), 'yyyyMMddHHmmssfff'))"
+            }
+        },
+        "activities": [
+            {
+                "name": "Copy_BatchData_to_Bronze",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "1.00:00:00",
+                    "retry": 5,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "DataIngestion"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Copies full batch data to ADLS Gen2 Bronze as raw files."
+                    }
+                ],
+                "typeProperties": {
+                    "source": {
+                        "type": "RestSource",
+                        "httpRequestTimeout": "00:01:00",
+                        "paginationRules": {},
+                        "sourceRetryCount": 3,
+                        "sourceRetryWait": "00:00:10"
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "JsonWriteSettings",
+                            "filePattern": "arrayOfObjects"
+                        }
+                    },
+                    "enableStaging": false,
+                    "parallelCopies": 8,
+                    "enableSkipIncompatibleRow": true,
+                    "redirectIncompatibleRowSettings": {
+                        "path": {
+                            "value": "bronze/@{pipeline().parameters.dlqRelativePath}/@{pipeline().parameters.sourceSystemName}/@{pipeline().parameters.sourceEntityName}/@{variables('executionYear')}/@{variables('executionMonth')}/@{variables('executionDay')}/",
+                            "type": "Expression"
+                        },
+                        "fileName": {
+                            "value": "incompatible_rows_@{pipeline().RunId}.csv",
+                            "type": "Expression"
+                        },
+                        "skipErrorFile": true
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "RawJson-MarketingCampaigns-DS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "relativeUrl": {
+                                "value": "@pipeline().parameters.sourceRelativeUrl",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "AdlsGen2-BronzeRawFiles-DS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "sourceSystem": {
+                                "value": "@pipeline().parameters.sourceSystemName",
+                                "type": "Expression"
+                            },
+                            "entityName": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            },
+                            "year": {
+                                "value": "@variables('executionYear')",
+                                "type": "Expression"
+                            },
+                            "month": {
+                                "value": "@variables('executionMonth')",
+                                "type": "Expression"
+                            },
+                            "day": {
+                                "value": "@variables('executionDay')",
+                                "type": "Expression"
+                            },
+                            "fileName": {
+                                "value": "@variables('outputFileName')",
+                                "type": "Expression"
+                            },
+                            "fileFormat": {
+                                "value": "@pipeline().parameters.outputFileFormat",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            }
+        ],
+        "folder": {
+            "name": "BronzeIngestion/Batch"
+        }
+    }
+}

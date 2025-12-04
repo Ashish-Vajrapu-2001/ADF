@@ -1,0 +1,39 @@
+{
+    "name": "Parquet-DeltaSink-DS",
+    "properties": {
+        "annotations": [
+            "Sink",
+            "Bronze",
+            "DeltaLake"
+        ],
+        "linkedServiceName": {
+            "referenceName": "AdlsGen2-Bronze-LS",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "sourceSystem": {
+                "type": "String"
+            },
+            "entityName": {
+                "type": "String"
+            },
+            "subFolder": {
+                "type": "String",
+                "defaultValue": ""
+            }
+        },
+        "type": "Parquet",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "folderPath": {
+                    "value": "bronze/@{dataset().sourceSystem}/@{dataset().entityName}/@{dataset().subFolder}",
+                    "type": "Expression"
+                },
+                "fileSystem": "data"
+            },
+            "compressionCodec": "snappy"
+        },
+        "description": "ADLS Gen2 Bronze sink dataset for Delta Lake tables (writes Parquet, ADF Copy can be configured to write as Delta)."
+    }
+}

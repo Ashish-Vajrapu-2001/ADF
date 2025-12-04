@@ -1,0 +1,33 @@
+{
+    "name": "trigger_daily_batch_marketing",
+    "properties": {
+        "annotations": [],
+        "runtimeState": "Started",
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pipeline_bronze_batch_full_ingestion",
+                    "type": "PipelineReference"
+                },
+                "parameters": {
+                    "sourceSystemName": "marketing",
+                    "sourceType": "Api",
+                    "sourceEntityName": "MARKETING_CAMPAIGNS",
+                    "sourceLinkedService": "MarketingApi-LS",
+                    "sourceRelativeUrl": "api/v1/campaigns",
+                    "outputFileFormat": "json",
+                    "dlqRelativePath": "dlq/"
+                }
+            }
+        ],
+        "type": "ScheduleTrigger",
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "startTime": "2025-01-01T02:00:00Z",
+                "timeZone": "UTC"
+            }
+        }
+    }
+}

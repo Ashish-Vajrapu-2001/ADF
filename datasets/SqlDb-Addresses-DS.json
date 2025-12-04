@@ -1,0 +1,34 @@
+{
+    "name": "SqlDb-Addresses-DS",
+    "properties": {
+        "annotations": [
+            "Source",
+            "ERP",
+            "Incremental"
+        ],
+        "linkedServiceName": {
+            "referenceName": "OracleERP-LS",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "schemaName": {
+                "type": "String"
+            },
+            "tableName": {
+                "type": "String"
+            }
+        },
+        "type": "OracleTable",
+        "schema": [],
+        "typeProperties": {
+            "schema": {
+                "value": "@dataset().schemaName",
+                "type": "Expression"
+            },
+            "table": {
+                "value": "@dataset().tableName",
+                "type": "Expression"
+            }
+        }
+    }
+}

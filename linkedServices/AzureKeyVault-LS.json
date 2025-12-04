@@ -1,0 +1,18 @@
+{
+    "name": "AzureKeyVault-LS",
+    "properties": {
+        "annotations": [],
+        "type": "AzureKeyVault",
+        "typeProperties": {
+            "baseUrl": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "kv-base-url"
+            }
+        },
+        "description": "Linked service for Azure Key Vault to securely retrieve secrets. Ensure ADF Managed Identity has 'Key Vault Secret User' role on the Key Vault.",
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

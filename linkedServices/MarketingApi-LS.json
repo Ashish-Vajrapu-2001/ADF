@@ -1,0 +1,30 @@
+{
+    "name": "MarketingApi-LS",
+    "properties": {
+        "annotations": [
+            "SourceSystem",
+            "Marketing"
+        ],
+        "type": "HttpServer",
+        "typeProperties": {
+            "url": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "marketing-api-base-url"
+            },
+            "authenticationType": "Basic",
+            "userName": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "marketing-api-user"
+            },
+            "password": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "marketing-api-password"
+            }
+        },
+        "description": "Linked service for Marketing Platform API. Base URL, username, and password are from Azure Key Vault.",
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "name": "OracleERP-LS",
+    "properties": {
+        "annotations": [
+            "SourceSystem",
+            "ERP"
+        ],
+        "type": "Oracle",
+        "typeProperties": {
+            "connectionString": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "erp-oracle-connection-string"
+            }
+        },
+        "description": "Linked service for Oracle Fusion ERP Database (JDBC/ODBC). Connection string is stored in Azure Key Vault.",
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

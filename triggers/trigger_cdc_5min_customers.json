@@ -1,0 +1,41 @@
+{
+    "name": "trigger_cdc_5min_customers",
+    "properties": {
+        "annotations": [],
+        "runtimeState": "Started",
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pipeline_bronze_cdc_ingestion",
+                    "type": "PipelineReference"
+                },
+                "parameters": {
+                    "sourceSystemName": "crm",
+                    "sourceSchemaName": "CRM",
+                    "sourceEntityName": "CUSTOMERS",
+                    "sourceLinkedService": "OracleCRM-LS",
+                    "watermarkColumn": "LAST_UPDATE_DATE",
+                    "dlqRelativePath": "dlq/"
+                }
+            }
+        ],
+        "type": "TumblingWindowTrigger",
+        "typeProperties": {
+            "scope": "Pipeline",
+            "recurrence": {
+                "frequency": "Minute",
+                "interval": 5,
+                "startTime": "2025-01-01T00:00:00Z",
+                "endTime": "9999-12-31T23:59:59Z",
+                "timeZone": "UTC"
+            },
+            "retryPolicy": {
+                "intervalInSeconds": 30,
+                "count": 3
+            },
+            "maxConcurrency": 1,
+            "delay": "00:00:30",
+            "dependsOn": []
+        }
+    }
+}

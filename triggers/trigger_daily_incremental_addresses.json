@@ -1,0 +1,34 @@
+{
+    "name": "trigger_daily_incremental_addresses",
+    "properties": {
+        "annotations": [],
+        "runtimeState": "Started",
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pipeline_bronze_batch_initial_incremental_ingestion",
+                    "type": "PipelineReference"
+                },
+                "parameters": {
+                    "sourceSystemName": "erp",
+                    "sourceSchemaName": "ERP",
+                    "sourceEntityName": "ADDRESSES",
+                    "sourceLinkedService": "OracleERP-LS",
+                    "watermarkColumn": "LAST_UPDATE_DATE",
+                    "runMode": "Incremental",
+                    "outputFileFormat": "csv",
+                    "dlqRelativePath": "dlq/"
+                }
+            }
+        ],
+        "type": "ScheduleTrigger",
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "startTime": "2025-01-01T03:00:00Z",
+                "timeZone": "UTC"
+            }
+        }
+    }
+}

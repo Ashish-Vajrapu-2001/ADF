@@ -1,0 +1,59 @@
+{
+    "name": "AdlsGen2-BronzeRawFiles-DS",
+    "properties": {
+        "annotations": [
+            "Sink",
+            "Bronze",
+            "RawFiles"
+        ],
+        "linkedServiceName": {
+            "referenceName": "AdlsGen2-Bronze-LS",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "sourceSystem": {
+                "type": "String"
+            },
+            "entityName": {
+                "type": "String"
+            },
+            "year": {
+                "type": "String"
+            },
+            "month": {
+                "type": "String"
+            },
+            "day": {
+                "type": "String"
+            },
+            "fileName": {
+                "type": "String"
+            },
+            "fileFormat": {
+                "type": "String",
+                "defaultValue": "csv"
+            }
+        },
+        "type": "DelimitedText",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "folderPath": {
+                    "value": "bronze/@{dataset().sourceSystem}/@{dataset().entityName}/@{dataset().year}/@{dataset().month}/@{dataset().day}",
+                    "type": "Expression"
+                },
+                "fileSystem": "data",
+                "fileName": {
+                    "value": "@{dataset().fileName}.@{dataset().fileFormat}",
+                    "type": "Expression"
+                }
+            },
+            "columnDelimiter": ",",
+            "escapeChar": "\\",
+            "quoteChar": "\"",
+            "firstRowAsHeader": true,
+            "compressionCodec": "snappy"
+        },
+        "description": "ADLS Gen2 Bronze sink dataset for raw batch files (CSV/JSON)."
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "name": "SurveysDb-LS",
+    "properties": {
+        "annotations": [
+            "SourceSystem",
+            "Surveys"
+        ],
+        "type": "Oracle",
+        "typeProperties": {
+            "connectionString": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "surveys-db-connection-string"
+            }
+        },
+        "description": "Linked service for CRM Surveys Database (JDBC/ODBC). Connection string is stored in Azure Key Vault.",
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

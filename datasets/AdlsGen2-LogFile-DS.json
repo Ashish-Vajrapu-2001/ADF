@@ -1,0 +1,36 @@
+{
+    "name": "AdlsGen2-LogFile-DS",
+    "properties": {
+        "annotations": [
+            "Log",
+            "Bronze"
+        ],
+        "linkedServiceName": {
+            "referenceName": "AdlsGen2-Bronze-LS",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "logFileName": {
+                "type": "String",
+                "defaultValue": "pipeline_activity_log.csv"
+            }
+        },
+        "type": "DelimitedText",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "folderPath": "bronze/logs/",
+                "fileSystem": "data",
+                "fileName": {
+                    "value": "@dataset().logFileName",
+                    "type": "Expression"
+                }
+            },
+            "columnDelimiter": ",",
+            "escapeChar": "\\",
+            "quoteChar": "\"",
+            "firstRowAsHeader": false
+        },
+        "description": "ADLS Gen2 Bronze dataset for pipeline activity logs."
+    }
+}

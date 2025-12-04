@@ -1,0 +1,331 @@
+{
+    "name": "pipeline_bronze_batch_initial_incremental_ingestion",
+    "properties": {
+        "annotations": [
+            "Bronze",
+            "Batch",
+            "InitialLoad",
+            "IncrementalLoad",
+            "Ingestion"
+        ],
+        "description": "Ingests data with Initial (full load) or Incremental (watermark-based) batch mode into ADLS Gen2 Bronze as raw files.",
+        "parameters": {
+            "sourceSystemName": {
+                "type": "string",
+                "description": "Name of the source system (e.g., 'erp')."
+            },
+            "sourceSchemaName": {
+                "type": "string",
+                "description": "Schema name in the source database (e.g., 'ERP')."
+            },
+            "sourceEntityName": {
+                "type": "string",
+                "description": "Table name in the source database (e.g., 'ADDRESSES', 'CITY_TIER_MASTER')."
+            },
+            "sourceLinkedService": {
+                "type": "string",
+                "description": "Name of the source linked service (e.g., 'OracleERP-LS')."
+            },
+            "watermarkColumn": {
+                "type": "string",
+                "description": "Column used for watermarking (e.g., 'LAST_UPDATE_DATE', 'CREATED_DATE')."
+            },
+            "runMode": {
+                "type": "string",
+                "defaultValue": "Incremental",
+                "description": "Ingestion mode: 'Initial' for full load, 'Incremental' for delta load."
+            },
+            "outputFileFormat": {
+                "type": "string",
+                "defaultValue": "csv",
+                "description": "Output file format (e.g., 'json', 'csv')."
+            },
+            "dlqRelativePath": {
+                "type": "string",
+                "defaultValue": "dlq/",
+                "description": "Relative path for Dead-Letter Queue within bronze container."
+            }
+        },
+        "variables": {
+            "lastWatermarkValue": {
+                "type": "String"
+            },
+            "currentPipelineRunStart": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd HH:mm:ss.fff')"
+            },
+            "executionYear": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(utcNow(), 'yyyy')"
+            },
+            "executionMonth": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(utcNow(), 'MM')"
+            },
+            "executionDay": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(utcNow(), 'dd')"
+            },
+            "outputFileName": {
+                "type": "String",
+                "defaultValue": "@concat(pipeline().parameters.sourceEntityName, '_', formatDateTime(utcNow(), 'yyyyMMddHHmmssfff'))"
+            }
+        },
+        "activities": [
+            {
+                "name": "Lookup_LastWatermark",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 3,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "MetadataRead"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Retrieves the last watermark for the entity from a metadata store. Skipped in 'Initial' runMode."
+                    }
+                ],
+                "typeProperties": {
+                    "source": {
+                        "type": "OracleSource",
+                        "query": {
+                            "value": "SELECT LastWatermarkValue FROM metadata.Watermarks WHERE SourceSystem = '@{pipeline().parameters.sourceSystemName}' AND EntityName = '@{pipeline().parameters.sourceEntityName}'",
+                            "type": "Expression"
+                        }
+                    },
+                    "dataset": {
+                        "referenceName": "SqlDb-WatermarkMetadata-DS",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "Set_LastWatermarkVariable",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup_LastWatermark",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "VariableAssignment"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Sets the last watermark variable from lookup output, defaulting to a historical date if not found. Only runs in 'Incremental' mode."
+                    }
+                ],
+                "typeProperties": {
+                    "variableName": "lastWatermarkValue",
+                    "value": {
+                        "value": "@coalesce(activity('Lookup_LastWatermark').output.firstRow.LastWatermarkValue, '1900-01-01 00:00:00.000')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Copy_InitialIncremental_Data_to_Bronze",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Set_LastWatermarkVariable",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Skipped"
+                        ]
+                    },
+                    {
+                        "activity": "Lookup_LastWatermark",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Skipped"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "1.00:00:00",
+                    "retry": 5,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "DataIngestion"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Copies data (full or incremental) to ADLS Gen2 Bronze."
+                    }
+                ],
+                "typeProperties": {
+                    "source": {
+                        "type": "OracleSource",
+                        "oracleReaderQuery": {
+                            "value": "@if(equals(pipeline().parameters.runMode, 'Initial'), concat('SELECT * FROM ', pipeline().parameters.sourceSchemaName, '.', pipeline().parameters.sourceEntityName), concat('SELECT * FROM ', pipeline().parameters.sourceSchemaName, '.', pipeline().parameters.sourceEntityName, ' WHERE ', pipeline().parameters.watermarkColumn, ' > TO_TIMESTAMP(''', variables('lastWatermarkValue'), ''', ''YYYY-MM-DD HH24:MI:SS.FF3'')'))",
+                            "type": "Expression"
+                        }
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextWriteSettings",
+                            "quoteAllText": true,
+                            "fileExtension": ".csv"
+                        }
+                    },
+                    "enableStaging": false,
+                    "parallelCopies": 8,
+                    "enableSkipIncompatibleRow": true,
+                    "redirectIncompatibleRowSettings": {
+                        "path": {
+                            "value": "bronze/@{pipeline().parameters.dlqRelativePath}/@{pipeline().parameters.sourceSystemName}/@{pipeline().parameters.sourceEntityName}/@{variables('executionYear')}/@{variables('executionMonth')}/@{variables('executionDay')}/",
+                            "type": "Expression"
+                        },
+                        "fileName": {
+                            "value": "incompatible_rows_@{pipeline().RunId}.csv",
+                            "type": "Expression"
+                        },
+                        "skipErrorFile": true
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "SqlDb-Addresses-DS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "schemaName": {
+                                "value": "@pipeline().parameters.sourceSchemaName",
+                                "type": "Expression"
+                            },
+                            "tableName": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "AdlsGen2-BronzeRawFiles-DS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "sourceSystem": {
+                                "value": "@pipeline().parameters.sourceSystemName",
+                                "type": "Expression"
+                            },
+                            "entityName": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            },
+                            "year": {
+                                "value": "@variables('executionYear')",
+                                "type": "Expression"
+                            },
+                            "month": {
+                                "value": "@variables('executionMonth')",
+                                "type": "Expression"
+                            },
+                            "day": {
+                                "value": "@variables('executionDay')",
+                                "type": "Expression"
+                            },
+                            "fileName": {
+                                "value": "@variables('outputFileName')",
+                                "type": "Expression"
+                            },
+                            "fileFormat": {
+                                "value": "@pipeline().parameters.outputFileFormat",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Update_Watermark",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy_InitialIncremental_Data_to_Bronze",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 3,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "MetadataUpdate"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Updates the last watermark value in the metadata store, or initializes it for 'Initial' runMode."
+                    }
+                ],
+                "typeProperties": {
+                    "storedProcedureName": "metadata.usp_UpdateWatermark",
+                    "storedProcedureParameters": {
+                        "SourceSystem": {
+                            "value": {
+                                "value": "@pipeline().parameters.sourceSystemName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "EntityName": {
+                            "value": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "LastWatermarkValue": {
+                            "value": {
+                                "value": "@variables('currentPipelineRunStart')",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "SqlDb-WatermarkMetadata-LS",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "BronzeIngestion/Batch"
+        }
+    }
+}

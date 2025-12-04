@@ -1,0 +1,21 @@
+{
+    "name": "OracleCRM-LS",
+    "properties": {
+        "annotations": [
+            "SourceSystem",
+            "CRM"
+        ],
+        "type": "Oracle",
+        "typeProperties": {
+            "connectionString": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "crm-oracle-connection-string"
+            }
+        },
+        "description": "Linked service for Oracle Service Cloud CRM Database (JDBC/ODBC). Connection string is stored in Azure Key Vault.",
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

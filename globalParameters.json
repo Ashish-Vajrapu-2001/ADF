@@ -1,0 +1,37 @@
+{
+    "name": "globalParameters",
+    "properties": {
+        "environment": {
+            "type": "string",
+            "value": "dev"
+        },
+        "bronzeContainerName": {
+            "type": "string",
+            "value": "data"
+        },
+        "bronzeBasePath": {
+            "type": "string",
+            "value": "bronze"
+        },
+        "dlqBasePath": {
+            "type": "string",
+            "value": "bronze/dlq"
+        },
+        "logsBasePath": {
+            "type": "string",
+            "value": "bronze/logs"
+        },
+        "defaultRetryCount": {
+            "type": "int",
+            "value": 5
+        },
+        "defaultRetryIntervalSeconds": {
+            "type": "int",
+            "value": 60
+        },
+        "defaultTimeoutHours": {
+            "type": "int",
+            "value": 1
+        }
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "name": "AdlsGen2-Bronze-LS",
+    "properties": {
+        "annotations": [
+            "BronzeLayer",
+            "ManagedIdentity"
+        ],
+        "type": "AzureBlobFS",
+        "typeProperties": {
+            "url": {
+                "type": "AzureKeyVaultSecret",
+                "secretName": "adls-bronze-storage-url"
+            }
+        },
+        "description": "Linked service for ADLS Gen2 Bronze layer, using ADF System Managed Identity.",
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

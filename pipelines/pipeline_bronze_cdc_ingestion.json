@@ -1,0 +1,279 @@
+{
+    "name": "pipeline_bronze_cdc_ingestion",
+    "properties": {
+        "annotations": [
+            "Bronze",
+            "CDC",
+            "Ingestion"
+        ],
+        "description": "Ingests data from source relational databases (CRM/ERP) into ADLS Gen2 Bronze as Delta Lake tables using CDC/incremental pattern. Watermarking is used to fetch new records.",
+        "parameters": {
+            "sourceSystemName": {
+                "type": "string",
+                "description": "Name of the source system (e.g., 'crm', 'erp')."
+            },
+            "sourceSchemaName": {
+                "type": "string",
+                "description": "Schema name in the source database (e.g., 'CRM', 'ERP')."
+            },
+            "sourceEntityName": {
+                "type": "string",
+                "description": "Table name in the source database (e.g., 'CUSTOMERS', 'OE_ORDER_HEADERS_ALL')."
+            },
+            "sourceLinkedService": {
+                "type": "string",
+                "description": "Name of the source linked service (e.g., 'OracleCRM-LS', 'OracleERP-LS')."
+            },
+            "watermarkColumn": {
+                "type": "string",
+                "description": "Column used for watermarking (e.g., 'LAST_UPDATE_DATE', 'CREATED_DATE')."
+            },
+            "dlqRelativePath": {
+                "type": "string",
+                "defaultValue": "dlq/",
+                "description": "Relative path for Dead-Letter Queue within bronze container."
+            }
+        },
+        "variables": {
+            "lastWatermarkValue": {
+                "type": "String"
+            },
+            "currentPipelineRunStart": {
+                "type": "String",
+                "defaultValue": "@formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd HH:mm:ss.fff')"
+            }
+        },
+        "activities": [
+            {
+                "name": "Lookup_LastWatermark",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 3,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "MetadataRead"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Retrieves the last watermark for the entity from a metadata store."
+                    }
+                ],
+                "typeProperties": {
+                    "source": {
+                        "type": "OracleSource",
+                        "query": {
+                            "value": "SELECT LastWatermarkValue FROM metadata.Watermarks WHERE SourceSystem = '@{pipeline().parameters.sourceSystemName}' AND EntityName = '@{pipeline().parameters.sourceEntityName}'",
+                            "type": "Expression"
+                        }
+                    },
+                    "dataset": {
+                        "referenceName": "SqlDb-WatermarkMetadata-DS",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "Set_LastWatermarkVariable",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup_LastWatermark",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "VariableAssignment"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Sets the last watermark variable from lookup output, defaulting to a historical date if not found."
+                    }
+                ],
+                "typeProperties": {
+                    "variableName": "lastWatermarkValue",
+                    "value": {
+                        "value": "@coalesce(activity('Lookup_LastWatermark').output.firstRow.LastWatermarkValue, '1900-01-01 00:00:00.000')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Copy_CdcData_to_Bronze",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Set_LastWatermarkVariable",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "1.00:00:00",
+                    "retry": 5,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "DataIngestion"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Copies incremental data to ADLS Gen2 Bronze, writing to Delta Lake format."
+                    }
+                ],
+                "typeProperties": {
+                    "source": {
+                        "type": "OracleSource",
+                        "oracleReaderQuery": {
+                            "value": "SELECT * FROM @{pipeline().parameters.sourceSchemaName}.@{pipeline().parameters.sourceEntityName} WHERE @{pipeline().parameters.watermarkColumn} > TO_TIMESTAMP('@{variables('lastWatermarkValue')}', 'YYYY-MM-DD HH24:MI:SS.FF3')",
+                            "type": "Expression"
+                        }
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings",
+                            "copyBehavior": "MergeFiles"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings",
+                            "maxRowsPerFile": 1000000
+                        },
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    },
+                    "enableStaging": false,
+                    "enableSkipIncompatibleRow": true,
+                    "redirectIncompatibleRowSettings": {
+                        "path": {
+                            "value": "bronze/@{pipeline().parameters.dlqRelativePath}/@{pipeline().parameters.sourceSystemName}/@{pipeline().parameters.sourceEntityName}/@{formatDateTime(utcNow(), 'yyyy/MM/dd')}/",
+                            "type": "Expression"
+                        },
+                        "fileName": {
+                            "value": "incompatible_rows_@{pipeline().RunId}.csv",
+                            "type": "Expression"
+                        },
+                        "skipErrorFile": true
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "SqlDb-Customers-DS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "schemaName": {
+                                "value": "@pipeline().parameters.sourceSchemaName",
+                                "type": "Expression"
+                            },
+                            "tableName": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "Parquet-DeltaSink-DS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "sourceSystem": {
+                                "value": "@pipeline().parameters.sourceSystemName",
+                                "type": "Expression"
+                            },
+                            "entityName": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Update_Watermark",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy_CdcData_to_Bronze",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 3,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [
+                    {
+                        "name": "ActivityType",
+                        "value": "MetadataUpdate"
+                    },
+                    {
+                        "name": "Description",
+                        "value": "Updates the last watermark value in the metadata store."
+                    }
+                ],
+                "typeProperties": {
+                    "storedProcedureName": "metadata.usp_UpdateWatermark",
+                    "storedProcedureParameters": {
+                        "SourceSystem": {
+                            "value": {
+                                "value": "@pipeline().parameters.sourceSystemName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "EntityName": {
+                            "value": {
+                                "value": "@pipeline().parameters.sourceEntityName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "LastWatermarkValue": {
+                            "value": {
+                                "value": "@variables('currentPipelineRunStart')",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "SqlDb-WatermarkMetadata-LS",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "BronzeIngestion/CDC"
+        }
+    }
+}
